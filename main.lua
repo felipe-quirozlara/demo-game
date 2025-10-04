@@ -27,6 +27,10 @@ function love.update(dt)
         if level and level.update then
             level:update(dt)
         end
+        -- switch to game over when player dies
+        if player and player.dead then
+            gameState = "gameover"
+        end
     end
 end
 
@@ -44,6 +48,13 @@ function love.draw()
 
         love.graphics.setColor(1,1,1)
         love.graphics.print("Use A/D or Left/Right to move, Space to jump", 10, 10)
+        if gameState == "gameover" then
+            love.graphics.setColor(0,0,0,0.6)
+            love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+            love.graphics.setColor(1,1,1)
+            love.graphics.printf("GAME OVER", 0, 200, love.graphics.getWidth(), "center")
+            love.graphics.printf("Press R to restart level, M to return to menu", 0, 240, love.graphics.getWidth(), "center")
+        end
     end
 end
 
@@ -99,17 +110,40 @@ function love.keypressed(key)
         player:jump()
     end
     if key == "r" then
-        if level and level.reset then
-            level:reset()
+        -- if game over, restart current level; otherwise, reset level in-play
+        if gameState == "gameover" then
+            -- restart level: reload the current script
+            local info = levelsList[currentLevelIndex]
+            if info then
+                local ok, script = pcall(require, info.module)
+                if ok and script then
+                    level:loadScript(script)
+                    level.player = player
+                    player = Player.new(100, 100, level)
+                    level.player = player
+                    gameState = "playing"
+                else
+                    gameState = "menu"
+                end
+            else
+                gameState = "menu"
+            end
+        else
+            if level and level.reset then
+                level:reset()
+            end
+            -- clear player bullets and reset position
+            if player then
+                player.bullets = {}
+                player.x = 100
+                player.y = 100
+                player.vx = 0
+                player.vy = 0
+            end
         end
-        -- clear player bullets and reset position
-        if player then
-            player.bullets = {}
-            player.x = 100
-            player.y = 100
-            player.vx = 0
-            player.vy = 0
-        end
+    end
+    if key == "m" and gameState == "gameover" then
+        gameState = "menu"
     end
 end
 

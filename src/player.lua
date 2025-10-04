@@ -31,6 +31,8 @@ function Player.new(x, y, level)
     -- invulnerability after taking damage (seconds)
     self.invulnTime = 0
     self.invulnDuration = 0.8
+    -- alive state
+    self.dead = false
     return self
 end
 
@@ -135,13 +137,8 @@ function Player:takeDamage(halfUnits)
     self.invulnTime = self.invulnDuration
     -- death handling
     if self.halfHearts <= 0 then
-        -- simple reset to starting position if out of hearts
-        if self.level then
-            -- reset position roughly to left side
-            self.x, self.y = 60, 500
-            self.vx, self.vy = 0, 0
-            self.halfHearts = self.maxHalfHearts
-        end
+        -- mark player as dead; main game loop will handle game over
+        self.dead = true
     end
 end
 
