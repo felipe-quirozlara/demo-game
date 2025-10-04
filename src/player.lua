@@ -25,6 +25,12 @@ function Player.new(x, y, level)
     -- per-player bullet speed (can be changed externally)
     self.bulletSpeed = SHOOT_VELOCITY
     self.level = level
+    -- health: 5 hearts represented as 10 half-hearts
+    self.maxHalfHearts = 10
+    self.halfHearts = self.maxHalfHearts
+    -- invulnerability after taking damage (seconds)
+    self.invulnTime = 0
+    self.invulnDuration = 0.8
     return self
 end
 
@@ -116,6 +122,27 @@ function Player:update(dt)
         -- reset timer so we fire immediately when starting again
         self.fireTimer = 0
     end
+
+    -- decrement invulnerability timer
+    if self.invulnTime and self.invulnTime > 0 then
+        self.invulnTime = math.max(0, self.invulnTime - dt)
+    end
+end
+
+function Player:takeDamage(halfUnits)
+    if self.invulnTime > 0 then return end
+    self.halfHearts = math.max(0, self.halfHearts - (halfUnits or 1))
+    self.invulnTime = self.invulnDuration
+    -- death handling
+    if self.halfHearts <= 0 then
+        -- simple reset to starting position if out of hearts
+        if self.level then
+            -- reset position roughly to left side
+            self.x, self.y = 60, 500
+            self.vx, self.vy = 0, 0
+            self.halfHearts = self.maxHalfHearts
+        end
+    end
 end
 
 function Player:jump()
@@ -134,6 +161,22 @@ function Player:draw()
     for _, b in ipairs(self.bullets) do
         love.graphics.circle("fill", b.x, b.y, b.r)
     end
+
+    -- draw hearts UI (half hearts)
+    local startX = 12
+    local startY = 12
+    local hh = self.halfHearts
+    for i = 1, self.maxHalfHearts do
+        local x = startX + (i-1) * 14
+        if hh >= i then
+            love.graphics.setColor(1, 0.1, 0.1)
+            love.graphics.rectangle("fill", x, startY, 12, 12)
+        else
+            love.graphics.setColor(0.4, 0.4, 0.4)
+            love.graphics.rectangle("line", x, startY, 12, 12)
+        end
+    end
+    love.graphics.setColor(1,1,1)
 end
 
 function Player:shoot(tx, ty)

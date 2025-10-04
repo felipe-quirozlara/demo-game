@@ -286,6 +286,31 @@ function Level:update(dt)
         end
     end
 
+    -- enemy-player collision: check overlaps and apply damage
+    if self.player then
+        for i = #self.enemies, 1, -1 do
+            local e = self.enemies[i]
+            if e then
+                if e.x < self.player.x + self.player.w and e.x + e.w > self.player.x and e.y < self.player.y + self.player.h and e.y + e.h > self.player.y then
+                    -- collision: decide damage (half-hearts)
+                    local damage = 1
+                    if e.maxHits == 10 or e.type == "boss" then damage = 2 end
+                    -- apply damage only if player not invulnerable
+                    if self.player.invulnTime <= 0 then
+                        self.player:takeDamage(damage)
+                        -- give the player a small knockback away from the enemy so they separate
+                        local px = self.player.x + self.player.w/2
+                        local ex = e.x + e.w/2
+                        local dir = 0
+                        if px > ex then dir = 1 else dir = -1 end
+                        self.player.vx = dir * 140
+                        -- do NOT remove the enemy on touch; the enemy should survive collisions
+                    end
+                end
+            end
+        end
+    end
+
     if self.scriptActive and self.scriptTotalSpawns <= 0 and #self.enemies == 0 then
         self.scriptActive = false
         self.completed = true
