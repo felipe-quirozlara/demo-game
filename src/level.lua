@@ -128,7 +128,30 @@ function Level:loadScript(script)
         end
     end
     -- if script defines counts and order, schedule them in sequence
-    if script.counts and script.order then
+    if script.groups then
+        -- groups: an ordered list where each group has { type, count, requiredPercent }
+        self.groups = {}
+        self.currentGroupIndex = 1
+        self.groupSpawnTimer = 0
+        self.groupSpawnInterval = script.spawnInterval or self.enemySpawnInterval or 1
+        for gi, g in ipairs(script.groups) do
+            local hits = g.hits or typeToHits(g.type)
+            local group = {
+                type = g.type,
+                hits = hits,
+                count = g.count or 1,
+                requiredPercent = g.requiredPercent or 1.0,
+                spawned = 0,
+                deaths = 0,
+            }
+            table.insert(self.groups, group)
+            self.scriptTotalSpawns = self.scriptTotalSpawns + group.count
+        end
+        -- schedule the first group's spawns over time
+        if #self.groups > 0 then
+            self.groupSpawnTimer = 0
+        end
+    elseif script.counts and script.order then
         local interval = script.spawnInterval or self.enemySpawnInterval or 1
         local ttime = 0
         for _, typ in ipairs(script.order) do
@@ -181,7 +204,12 @@ function Level:update(dt)
                     end
                 end
             end
-            table.insert(self.enemies, Enemy.new(ex, ey, s.w or 32, s.h or 32, hits))
+            local en = Enemy.new(ex, ey, s.w or 32, s.h or 32, hits)
+            -- if currently spawning from groups, assign group index
+            if self.currentGroupIndex and self.groups and self.groups[self.currentGroupIndex] then
+                en.group = self.currentGroupIndex
+            end
+            table.insert(self.enemies, en)
             table.remove(self.spawnQueue, i)
             if self.scriptActive and self.scriptTotalSpawns > 0 then
                 self.scriptTotalSpawns = self.scriptTotalSpawns - 1
@@ -196,6 +224,35 @@ function Level:update(dt)
             self.spawnTimer = self.enemySpawnInterval or self.randomSpawnInterval
             -- spawn single enemy at random
             self:spawnRandomEnemies(1)
+        end
+    end
+
+    -- process groups (scripted grouped spawns)
+    if self.groups and #self.groups > 0 and self.currentGroupIndex and self.currentGroupIndex <= #self.groups then
+        local g = self.groups[self.currentGroupIndex]
+        -- determine completion percent of previous group
+        if g.spawned < g.count then
+            -- spawn next from this group based on groupSpawnInterval
+            self.groupSpawnTimer = self.groupSpawnTimer - dt
+            if self.groupSpawnTimer <= 0 then
+                self.groupSpawnTimer = self.groupSpawnInterval
+                -- spawn one from group
+                self:scheduleSpawn(0, { type = g.type, hits = g.hits })
+                g.spawned = g.spawned + 1
+                -- note: scriptTotalSpawns was already counted when loading
+            end
+        else
+            -- group fully spawned; check deaths to decide when to advance
+            local percentDead = 0
+            if g.count > 0 then percentDead = g.deaths / g.count end
+            if percentDead >= (g.requiredPercent or 1.0) then
+                -- advance to next group
+                self.currentGroupIndex = self.currentGroupIndex + 1
+                if self.currentGroupIndex > #self.groups then
+                    -- no more groups
+                    self.currentGroupIndex = nil
+                end
+            end
         end
     end
 
@@ -229,6 +286,10 @@ function Level:draw()
 end
 
 function Level:removeEnemy(index)
+    local e = self.enemies[index]
+    if e and e.group and self.groups and self.groups[e.group] then
+        self.groups[e.group].deaths = (self.groups[e.group].deaths or 0) + 1
+    end
     table.remove(self.enemies, index)
 end
 

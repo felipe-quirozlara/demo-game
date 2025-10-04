@@ -10,6 +10,7 @@ function Enemy.new(x, y, w, h, hits)
     self.hitsRemaining = hits or 2
     self.maxHits = hits or 2
     self.type = "grunt"
+    self.group = nil
     return self
 end
 

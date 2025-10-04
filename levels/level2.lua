@@ -11,6 +11,11 @@ return {
     counts = { grunt = 15, soldier = 7, boss = 1 },
     order = { "grunt", "grunt", "soldier", "grunt", "boss" },
     spawnInterval = 0.6,
+    groups = {
+        { type = "grunt", count = 15, requiredPercent = 0.6 },
+        { type = "soldier", count = 7, requiredPercent = 0.75 },
+        { type = "boss", count = 1, requiredPercent = 1.0 },
+    },
     randomSpawns = false,
     initial = {
         { type = "grunt", count = 3 },
