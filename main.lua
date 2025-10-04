@@ -123,10 +123,39 @@ function love.draw()
         love.graphics.rectangle("fill", bx, by, bw, bh)
         love.graphics.setColor(1,1,1)
         love.graphics.printf("Start Run", bx, by + 14, bw, "center")
+    -- Upgrades screen button (next to Start)
+    local ubw, ubh = 120, 36
+    local ubx = bx + bw + 12
+    local uby = by + (bh - ubh) / 2
+    local upHover = mx >= ubx and mx <= ubx + ubw and my >= uby and my <= uby + ubh
+    love.graphics.setColor(upHover and {0.2,0.6,0.8} or {0.1,0.4,0.6})
+    love.graphics.rectangle("fill", ubx, uby, ubw, ubh)
+    love.graphics.setColor(1,1,1)
+    love.graphics.printf("Upgrades", ubx, uby + 8, ubw, "center")
+    -- Shop: Red Burst weapon button
+        local shopY = by + bh + 18
+        local sbw, sbh = 220, 40
+        local sbx = cx - sbw/2
+        local sby = shopY
+        local owned = player:hasUpgrade("red_burst")
+        local price = 50
+        local shopHover = mx >= sbx and mx <= sbx + sbw and my >= sby and my <= sby + sbh
+        love.graphics.setColor(shopHover and {0.6,0.1,0.1} or {0.4,0.1,0.1})
+        love.graphics.rectangle("fill", sbx, sby, sbw, sbh)
+        love.graphics.setColor(1,1,1)
+        if owned then
+            love.graphics.printf("Owned: Red Burst", sbx, sby + 12, sbw, "center")
+        else
+            love.graphics.printf(string.format("Buy Red Burst (%d)", price), sbx, sby + 12, sbw, "center")
+        end
         -- Debug overlay
         love.graphics.setColor(1,1,1)
         love.graphics.print(string.format("Mouse: %d, %d", mx, my), 10, love.graphics.getHeight() - 40)
         love.graphics.print(string.format("Hovering Start: %s", tostring(hover)), 10, love.graphics.getHeight() - 24)
+        love.graphics.print(string.format("Hovering Upgrades: %s", tostring(upHover)), 10, love.graphics.getHeight() - 56)
+    elseif gameState == "upgrades" then
+        drawUpgrades()
+        return
     else
         level:draw()
         player:draw()
@@ -183,6 +212,11 @@ end
 function love.keypressed(key)
     if key == "escape" then
         love.event.quit()
+    end
+    -- allow 'M' to return from upgrades screen
+    if key == "m" and gameState == "upgrades" then
+        gameState = "menu"
+        return
     end
     if gameState == "menu" then
         -- allow Enter to start the run
@@ -333,18 +367,121 @@ function love.mousepressed(x, y, button)
             startRun(1)
             return
         end
+        -- Upgrades button region
+        local ubw, ubh = 120, 36
+        local ubx = bx + bw + 12
+        local uby = by + (bh - ubh) / 2
+        if x >= ubx and x <= ubx + ubw and y >= uby and y <= uby + ubh then
+            gameState = "upgrades"
+            return
+        end
+        -- shop button region (Red Burst)
+        local shopY = by + bh + 18
+        local sbw, sbh = 220, 40
+        local sbx = cx - sbw/2
+        local sby = shopY
+        if x >= sbx and x <= sbx + sbw and y >= sby and y <= sby + sbh then
+            -- attempt purchase
+            local price = 50
+            if player:hasUpgrade("red_burst") then
+                -- already owned: equip it
+                player.weapon = "red_burst"
+            else
+                local ok, err = player:buyUpgrade("red_burst", price)
+                if not ok then pcall(print, "buy failed:", err) end
+            end
+            return
+        end
+        return
+    end
+
+    -- Upgrades screen input
+    if gameState == "upgrades" then
+        -- coordinates must match drawUpgrades layout (single Red Burst entry)
+        local bw, bh = 520, 56
+        local cx = love.graphics.getWidth() / 2
+        local bx = cx - bw/2
+        local by = 140
+        local btnW, btnH = 100, 36
+        local btnX = bx + bw - btnW - 12
+        local btnY = by + 10
+        if x >= btnX and x <= btnX + btnW and y >= btnY and y <= btnY + btnH then
+            local id = "red_burst"
+            local price = 50
+            if player:hasUpgrade(id) then
+                -- toggle equip/unequip
+                if player.weapon == id then
+                    player:unequip()
+                else
+                    player:equipUpgrade(id)
+                end
+            else
+                local ok, err = player:buyUpgrade(id, price)
+                if not ok then pcall(print, "buy failed:", err) end
+            end
+            return
+        end
         return
     end
 
     -- In-game: firing
     if player then
-        player.firing = true
         player.lastMouseX = x
         player.lastMouseY = y
-        if player.shoot then player:shoot(x, y) end
-        player.fireTimer = player.fireInterval or (1 / (player.fireRate or 8))
+        if player.weapon == "red_burst" and type(player.burstFire) == "function" then
+            -- click-to-fire burst weapon
+            pcall(function() player:burstFire(x, y) end)
+            -- persist no auto-fire (do not set player.firing)
+        else
+            player.firing = true
+            if player.shoot then player:shoot(x, y) end
+            player.fireTimer = player.fireInterval or (1 / (player.fireRate or 8))
+        end
     end
 end
+
+-- Draw Upgrades screen
+function drawUpgrades()
+    love.graphics.setColor(1,1,1)
+    love.graphics.printf("Upgrades", 0, 40, love.graphics.getWidth(), "center")
+    love.graphics.printf(string.format("Money: %d", player.money or 0), 0, 80, love.graphics.getWidth(), "center")
+    -- list upgrades vertically
+    local startY = 140
+    local gap = 72
+    local cx = love.graphics.getWidth() / 2
+    -- Example: red_burst
+    local name = "Red Burst"
+    local id = "red_burst"
+    local price = 50
+    local owned = player:hasUpgrade(id)
+    local equipped = (player.weapon == id)
+    local boxW, boxH = 520, 56
+    local bx = cx - boxW/2
+    local by = startY
+    love.graphics.setColor(0.15,0.15,0.15)
+    love.graphics.rectangle("fill", bx, by, boxW, boxH)
+    love.graphics.setColor(1,1,1)
+    love.graphics.printf(name, bx + 12, by + 8, 300)
+    if owned then
+        love.graphics.printf("Owned", bx + 320, by + 8, 80)
+    else
+        love.graphics.printf(string.format("Price: %d", price), bx + 320, by + 8, 80)
+    end
+    if equipped then love.graphics.printf("Equipped", bx + 420, by + 8, 80) end
+    -- buttons: Buy/Equip/Unequip
+    -- Buy/Equip button box
+    local bw = 100; local bh = 36
+    local buyX = bx + boxW - bw - 12
+    local buyY = by + 10
+    love.graphics.setColor(owned and {0.2,0.6,0.2} or {0.4,0.1,0.1})
+    love.graphics.rectangle("fill", buyX, buyY, bw, bh)
+    love.graphics.setColor(1,1,1)
+    love.graphics.printf(owned and (equipped and "Unequip" or "Equip") or "Buy", buyX, buyY + 8, bw, "center")
+
+    love.graphics.setColor(1,1,1)
+    love.graphics.printf("Press M to return to menu", 0, love.graphics.getHeight() - 40, love.graphics.getWidth(), "center")
+end
+
 
 function love.mousereleased(x, y, button)
     if button == 1 and player then

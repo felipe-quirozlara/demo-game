@@ -32,6 +32,11 @@ function Player.new(x, y, level)
     self.money = 0
     -- player id or name could be added later; for now single save slot
     self._saveFilename = "player_save.lua"
+    -- upgrades and equipped weapon
+    -- owned upgrades: table of id -> true
+    self.upgrades = {}
+    -- equipped weapon id
+    self.weapon = "basic"
     -- invulnerability after taking damage (seconds)
     self.invulnTime = 0
     self.invulnDuration = 0.8
@@ -51,6 +56,8 @@ function Player:loadFromDisk()
                 local status, tbl = pcall(chunk)
                 if status and type(tbl) == "table" then
                     if tbl.money then self.money = tbl.money end
+                    if tbl.upgrades and type(tbl.upgrades) == "table" then self.upgrades = tbl.upgrades end
+                    if tbl.weapon and type(tbl.weapon) == "string" then self.weapon = tbl.weapon end
                 end
             end
         end
@@ -59,7 +66,7 @@ end
 
 function Player:saveToDisk()
     if not love.filesystem then return end
-    local tbl = { money = self.money }
+    local tbl = { money = self.money, upgrades = self.upgrades, weapon = self.weapon }
     -- simple table->string serializer for the small save
     local function serialize(t)
         local parts = {"{"}
@@ -79,6 +86,37 @@ function Player:saveToDisk()
     end
     local out = "return " .. serialize(tbl)
     love.filesystem.write(self._saveFilename, out)
+end
+
+-- API: buy an upgrade by id and cost. Returns true on success.
+function Player:buyUpgrade(id, cost)
+    cost = cost or 0
+    if self.upgrades[id] then return false, "already owned" end
+    if self.money < cost then return false, "insufficient funds" end
+    self.money = self.money - cost
+    self.upgrades[id] = true
+    pcall(function() self:saveToDisk() end)
+    return true
+end
+
+-- check ownership
+function Player:hasUpgrade(id)
+    return self.upgrades[id] == true
+end
+
+-- Equip an owned upgrade (e.g., a weapon). Returns true on success.
+function Player:equipUpgrade(id)
+    if not self:hasUpgrade(id) then return false, "not owned" end
+    self.weapon = id
+    pcall(function() self:saveToDisk() end)
+    return true
+end
+
+-- Unequip current upgrade (revert to basic)
+function Player:unequip()
+    self.weapon = "basic"
+    pcall(function() self:saveToDisk() end)
+    return true
 end
 
 
@@ -158,17 +196,36 @@ function Player:update(dt)
     end
 
     -- firing logic: if firing, spawn bullets at fireRate toward last mouse pos
-    if self.firing then
-        self.fireTimer = self.fireTimer - dt
-        local interval = self.fireInterval or (1 / self.fireRate)
-        while self.fireTimer <= 0 do
-            -- spawn
-            self:shoot(self.lastMouseX, self.lastMouseY)
-            self.fireTimer = self.fireTimer + interval
+    -- weapon handling:
+    if self.weapon == "basic" then
+        if self.firing then
+            self.fireTimer = self.fireTimer - dt
+            local interval = self.fireInterval or (1 / self.fireRate)
+            while self.fireTimer <= 0 do
+                -- spawn
+                self:shoot(self.lastMouseX, self.lastMouseY)
+                self.fireTimer = self.fireTimer + interval
+            end
+        else
+            -- reset timer so we fire immediately when starting again
+            self.fireTimer = 0
         end
+    elseif self.weapon == "red_burst" then
+        -- red_burst is click-to-fire only; continuous firing ignored
+        -- firing state is handled on mousepressed to trigger a 3-shot burst
+        -- here we just noop to avoid auto-fire
     else
-        -- reset timer so we fire immediately when starting again
-        self.fireTimer = 0
+        -- default fallback to basic
+        if self.firing then
+            self.fireTimer = self.fireTimer - dt
+            local interval = self.fireInterval or (1 / self.fireRate)
+            while self.fireTimer <= 0 do
+                self:shoot(self.lastMouseX, self.lastMouseY)
+                self.fireTimer = self.fireTimer + interval
+            end
+        else
+            self.fireTimer = 0
+        end
     end
 
     -- decrement invulnerability timer
@@ -200,8 +257,8 @@ function Player:draw()
     love.graphics.rectangle("fill", math.floor(self.x), math.floor(self.y), self.w, self.h)
 
     -- draw bullets
-    love.graphics.setColor(1, 0.6, 0.2)
     for _, b in ipairs(self.bullets) do
+        if b.color then love.graphics.setColor(b.color) else love.graphics.setColor(1, 0.6, 0.2) end
         love.graphics.circle("fill", b.x, b.y, b.r)
     end
 
@@ -234,8 +291,26 @@ function Player:shoot(tx, ty)
     if len == 0 then len = 1 end
     local vx = (dx / len) * self.bulletSpeed
     local vy = (dy / len) * self.bulletSpeed
-    local bullet = { x = sx, y = sy, vx = vx, vy = vy, r = 4, life = 2 }
+    local bullet = { x = sx, y = sy, vx = vx, vy = vy, r = 4, life = 2, color = {1,0.6,0.2} }
     table.insert(self.bullets, bullet)
+end
+
+-- special burst fire (3 shots) used by red_burst weapon
+function Player:burstFire(tx, ty)
+    local shots = 3
+    local spread = 0.12 -- radians spread
+    local sx = self.x + self.w / 2
+    local sy = self.y + self.h / 2
+    local dx = tx - sx
+    local dy = ty - sy
+    local baseAngle = math.atan2(dy, dx)
+    for i=1,shots do
+        local a = baseAngle + ((i - (shots+1)/2) * spread)
+        local vx = math.cos(a) * self.bulletSpeed
+        local vy = math.sin(a) * self.bulletSpeed
+        local bullet = { x = sx, y = sy, vx = vx, vy = vy, r = 4, life = 2, color = {1,0.1,0.1} }
+        table.insert(self.bullets, bullet)
+    end
 end
 
 return Player

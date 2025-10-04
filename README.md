@@ -34,3 +34,8 @@ Persistence (Rogue-lite changes)
 - Money is persisted immediately when the player picks up coins and also loaded when the game starts.
 
 If you want to reset the money, delete the save file in the LÖVE save folder or implement a reset option in-game.
+
+Shop and Upgrades
+- The game now includes a simple shop on the main menu. You can buy upgrades (stored in the save file) using in-game money.
+- Currently available: "Red Burst" weapon (cost: 50). It fires a 3-shot burst per click and does not auto-fire.
+- Upgrades and the equipped weapon are saved along with money in `player_save.lua`.
