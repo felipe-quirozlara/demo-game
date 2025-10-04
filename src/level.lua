@@ -348,6 +348,10 @@ function Level:update(dt)
                 if c.x > px and c.x < px + pw and c.y > py and c.y < py + ph then
                     if self.player.money ~= nil then
                         self.player.money = self.player.money + (c.amount or 0)
+                            -- persist money immediately to keep across runs
+                            if type(self.player.saveToDisk) == "function" then
+                                pcall(function() self.player:saveToDisk() end)
+                            end
                     end
                     table.remove(self.coins, i)
                 end

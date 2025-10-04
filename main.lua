@@ -21,9 +21,42 @@ function love.load()
     love.window.setMode(800, 600)
     level = Level.new()
     player = Player.new(100, 100, level)
+    -- load persisted player info (money etc.)
+    if type(player.loadFromDisk) == "function" then pcall(function() player:loadFromDisk() end) end
     -- let level know about player to avoid spawning on top of them
     level.player = player
     -- wait in menu until user selects level
+end
+
+-- helper to start a run at the given level index (defaults to 1)
+local function startRun(idx)
+    idx = idx or 1
+    local info = levelsList[idx]
+    if not info then return false end
+    pcall(print, string.format("startRun: attempting to start level %s (module=%s)", tostring(idx), tostring(info.module)))
+    local ok, script = pcall(require, info.module)
+    if not ok or not script then return false end
+    pcall(print, string.format("startRun: loaded module %s", tostring(info.module)))
+    currentLevelIndex = idx
+    level:loadScript(script)
+    level.player = player
+    -- reset transient run state but keep persistent money
+    player.x = 100; player.y = 100; player.vx = 0; player.vy = 0; player.bullets = {}
+    player.halfHearts = player.maxHalfHearts
+    player.invulnTime = 0
+    player.dead = false
+    runHasDied = false
+    runStartTime = love.timer.getTime()
+    runKills = 0
+    level.onKill = function(_, enemy, byPlayer)
+        if byPlayer then runKills = runKills + 1 end
+    end
+    level.onComplete = function()
+        levelCompleteMode = true
+        levelCompleteTimer = 10
+    end
+    gameState = "playing"
+    return true
 end
 
 function love.update(dt)
@@ -77,11 +110,23 @@ end
 function love.draw()
     if gameState == "menu" then
         love.graphics.setColor(1,1,1)
-        love.graphics.printf("Select level:", 0, 80, love.graphics.getWidth(), "center")
-        for i, v in ipairs(levelsList) do
-            love.graphics.printf(string.format("%d) %s", v.id, v.name), 0, 100 + i*20, love.graphics.getWidth(), "center")
-        end
-        love.graphics.printf("Press number to start", 0, 180, love.graphics.getWidth(), "center")
+        love.graphics.printf("Demo Rogue-lite", 0, 60, love.graphics.getWidth(), "center")
+        love.graphics.printf(string.format("Money: %d", player.money or 0), 0, 120, love.graphics.getWidth(), "center")
+        -- Draw Start Run button
+        local bw, bh = 240, 48
+        local cx = love.graphics.getWidth() / 2
+        local bx = cx - bw/2
+        local by = 200
+        local mx, my = love.mouse.getPosition()
+        local hover = mx >= bx and mx <= bx + bw and my >= by and my <= by + bh
+        love.graphics.setColor(hover and {0.2,0.7,0.2} or {0.1,0.5,0.1})
+        love.graphics.rectangle("fill", bx, by, bw, bh)
+        love.graphics.setColor(1,1,1)
+        love.graphics.printf("Start Run", bx, by + 14, bw, "center")
+        -- Debug overlay
+        love.graphics.setColor(1,1,1)
+        love.graphics.print(string.format("Mouse: %d, %d", mx, my), 10, love.graphics.getHeight() - 40)
+        love.graphics.print(string.format("Hovering Start: %s", tostring(hover)), 10, love.graphics.getHeight() - 24)
     else
         level:draw()
         player:draw()
@@ -140,43 +185,9 @@ function love.keypressed(key)
         love.event.quit()
     end
     if gameState == "menu" then
-        -- number keys to select level
-        if key == "1" or key == "2" then
-            local idx = tonumber(key)
-            local info = levelsList[idx]
-            if info then
-                -- load script module
-                local ok, script = pcall(require, info.module)
-                if ok and script then
-                    level:loadScript(script)
-                    -- ensure level knows player
-                    level.player = player
-                    -- reset player (fresh run)
-                    player.x = 100; player.y = 100; player.vx = 0; player.vy = 0; player.bullets = {}
-                    player.halfHearts = player.maxHalfHearts
-                    player.invulnTime = 0
-                    player.dead = false
-                    runHasDied = false
-                    -- start run stats
-                    runStartTime = love.timer.getTime()
-                    runKills = 0
-                    level.onKill = function(_, enemy, byPlayer)
-                        if byPlayer then runKills = runKills + 1 end
-                    end
-                    currentLevelIndex = idx
-                    -- hook completion to advance
-                    level.onComplete = function()
-                        -- enter a short waiting window (10 seconds) where player must press 'c' to continue
-                        levelCompleteMode = true
-                        levelCompleteTimer = 10
-                        -- during this time the level is considered completed but the finished screen does not show yet
-                        -- pressing 'c' will immediately try to advance to the next level
-                    end
-                    gameState = "playing"
-                else
-                    print("Failed to load level script:", info.module)
-                end
-            end
+        -- allow Enter to start the run
+        if key == "return" or key == "enter" then
+            startRun(1)
         end
         return
     end
@@ -283,50 +294,55 @@ function love.keypressed(key)
 end
 
 function love.mousepressed(x, y, button)
-    if button == 1 then -- left click
-        if gameState == "finished" then
-            local bw, bh = 180, 36
-            local cx = love.graphics.getWidth() / 2
-            local bx1 = cx - bw - 10
-            local bx2 = cx + 10
-            local by = 330
-            if x >= bx1 and x <= bx1 + bw and y >= by and y <= by + bh then
-                -- New Game: replay campaign from level 1
-                local info = levelsList[1]
-                if info then
-                    local ok, script = pcall(require, info.module)
-                    if ok and script then
-                        currentLevelIndex = 1
-                        level:loadScript(script)
-                        player = Player.new(100, 100, level)
-                        level.player = player
-                        runHasDied = false
-                        runStartTime = love.timer.getTime()
-                        runKills = 0
-                        level.onKill = function(_, enemy, byPlayer)
-                            if byPlayer then runKills = runKills + 1 end
-                        end
-                        gameState = "playing"
-                        return
-                    end
-                end
-                gameState = "menu"
-                return
-            end
-            if x >= bx2 and x <= bx2 + bw and y >= by and y <= by + bh then
-                gameState = "menu"
-                return
-            end
+    -- Accept numeric 1 or string variants for left button for compatibility
+    local isLeft = false
+    if button == 1 then isLeft = true end
+    if type(button) == "string" then
+        local bl = button:lower()
+        if bl == "l" or bl == "left" or bl == "1" then isLeft = true end
+    end
+    if not isLeft then return end
+    -- debug: helpful prints to console if the button seems unresponsive
+    pcall(print, string.format("mousepressed: x=%s y=%s button=%s state=%s", tostring(x), tostring(y), tostring(button), tostring(gameState)))
+    -- Finished screen buttons (New Game, Back to Menu)
+    if gameState == "finished" then
+        local bw, bh = 180, 36
+        local cx = love.graphics.getWidth() / 2
+        local bx1 = cx - bw - 10
+        local bx2 = cx + 10
+        local by = 330
+        if x >= bx1 and x <= bx1 + bw and y >= by and y <= by + bh then
+            -- New Game: replay campaign from level 1
+            startRun(1)
+            return
         end
-        if player then
-            player.firing = true
-            player.lastMouseX = x
-            player.lastMouseY = y
-            -- immediate shot
-            if player.shoot then player:shoot(x, y) end
-            -- start the timer so continuous fire waits full interval
-            player.fireTimer = player.fireInterval or (1 / (player.fireRate or 8))
+        if x >= bx2 and x <= bx2 + bw and y >= by and y <= by + bh then
+            gameState = "menu"
+            return
         end
+        return
+    end
+
+    -- Menu: Start Run button
+    if gameState == "menu" then
+        local bw, bh = 240, 48
+        local cx = love.graphics.getWidth() / 2
+        local bx = cx - bw/2
+        local by = 200
+        if x >= bx and x <= bx + bw and y >= by and y <= by + bh then
+            startRun(1)
+            return
+        end
+        return
+    end
+
+    -- In-game: firing
+    if player then
+        player.firing = true
+        player.lastMouseX = x
+        player.lastMouseY = y
+        if player.shoot then player:shoot(x, y) end
+        player.fireTimer = player.fireInterval or (1 / (player.fireRate or 8))
     end
 end
 

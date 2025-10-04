@@ -30,6 +30,8 @@ function Player.new(x, y, level)
     self.halfHearts = self.maxHalfHearts
     -- money
     self.money = 0
+    -- player id or name could be added later; for now single save slot
+    self._saveFilename = "player_save.lua"
     -- invulnerability after taking damage (seconds)
     self.invulnTime = 0
     self.invulnDuration = 0.8
@@ -37,6 +39,48 @@ function Player.new(x, y, level)
     self.dead = false
     return self
 end
+
+-- Save/load helpers using love.filesystem
+function Player:loadFromDisk()
+    if not love.filesystem then return end
+    if love.filesystem.getInfo(self._saveFilename) then
+        local data, err = love.filesystem.read(self._saveFilename)
+        if data then
+            local ok, chunk = pcall(loadstring or load, data)
+            if ok and chunk then
+                local status, tbl = pcall(chunk)
+                if status and type(tbl) == "table" then
+                    if tbl.money then self.money = tbl.money end
+                end
+            end
+        end
+    end
+end
+
+function Player:saveToDisk()
+    if not love.filesystem then return end
+    local tbl = { money = self.money }
+    -- simple table->string serializer for the small save
+    local function serialize(t)
+        local parts = {"{"}
+        for k,v in pairs(t) do
+            local key = k
+            if type(key) == "string" then key = string.format('%q', key) end
+            local val
+            if type(v) == "number" or type(v) == "boolean" then
+                val = tostring(v)
+            else
+                val = string.format('%q', tostring(v))
+            end
+            table.insert(parts, string.format("[%s]=%s,", key, val))
+        end
+        table.insert(parts, "}")
+        return table.concat(parts)
+    end
+    local out = "return " .. serialize(tbl)
+    love.filesystem.write(self._saveFilename, out)
+end
+
 
 function Player:update(dt)
     -- Horizontal movement

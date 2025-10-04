@@ -27,3 +27,10 @@ Project structure
 
 Notes
 - This is intentionally small and easy to extend. Suggested next steps: add sprites, smoother acceleration, wall jumps, moving platforms, and collectibles.
+ 
+Persistence (Rogue-lite changes)
+- The game now keeps player money between runs (rogue-lite style). Money is saved to a small file using LÖVE's save system.
+- Save file: `player_save.lua` in LÖVE's save directory for the game (usually in `%appdata%/LOVE/demo-game/` on Windows).
+- Money is persisted immediately when the player picks up coins and also loaded when the game starts.
+
+If you want to reset the money, delete the save file in the LÖVE save folder or implement a reset option in-game.
