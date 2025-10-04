@@ -18,8 +18,8 @@ return {
     spawnInterval = 0.8,
     -- grouped spawns: each group has type, count, requiredPercent to proceed
     groups = {
-        { type = "grunt", count = 5, requiredPercent = 0.6 },
-        { type = "soldier", count = 3, requiredPercent = 0.7 },
+        { type = "grunt", count = 3, requiredPercent = 0.6 },
+        { type = "soldier", count = 2, requiredPercent = 0.7 },
         { type = "boss", count = 1, requiredPercent = 1.0 },
     },
     -- disable random spawns for fully scripted level

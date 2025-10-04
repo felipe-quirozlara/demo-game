@@ -96,7 +96,7 @@ function Player:update(dt)
                     table.remove(self.bullets, i)
                     removed = true
                     if e.hitsRemaining <= 0 then
-                        self.level:removeEnemy(ei)
+                        self.level:removeEnemy(ei, true)
                     end
                     break
                 end

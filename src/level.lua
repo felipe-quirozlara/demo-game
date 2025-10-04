@@ -34,6 +34,9 @@ function Level.new()
     self.currentScript = nil
     -- global multiplier to scale enemy jump heights (1.0 = unchanged)
     self.enemyJumpMultiplier = 1.0
+    -- kill counters
+    self.kills = 0
+    self.killsByPlayer = 0
     return self
 end
 
@@ -339,10 +342,17 @@ function Level:draw()
     end
 end
 
-function Level:removeEnemy(index)
+function Level:removeEnemy(index, byPlayer)
     local e = self.enemies[index]
     if e and e.group and self.groups and self.groups[e.group] then
         self.groups[e.group].deaths = (self.groups[e.group].deaths or 0) + 1
+    end
+    if e then
+        self.kills = (self.kills or 0) + 1
+        if byPlayer then
+            self.killsByPlayer = (self.killsByPlayer or 0) + 1
+        end
+        if self.onKill then pcall(self.onKill, self, e, byPlayer) end
     end
     table.remove(self.enemies, index)
 end

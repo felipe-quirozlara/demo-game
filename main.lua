@@ -5,6 +5,9 @@ local Level = require("src.level")
 local player
 local level
 local gameState = "menu" -- or "playing"
+local runHasDied = false -- track whether the player has died during the current run
+local runStartTime = 0
+local runKills = 0
 local levelsList = {
     { id = 1, name = "Level 1", module = "levels.level1" },
     { id = 2, name = "Level 2", module = "levels.level2" },
@@ -29,6 +32,7 @@ function love.update(dt)
         end
         -- switch to game over when player dies
         if player and player.dead then
+            runHasDied = true
             gameState = "gameover"
         end
     end
@@ -55,6 +59,36 @@ function love.draw()
             love.graphics.printf("GAME OVER", 0, 200, love.graphics.getWidth(), "center")
             love.graphics.printf("Press R to restart level, M to return to menu", 0, 240, love.graphics.getWidth(), "center")
         end
+        if gameState == "finished" then
+            love.graphics.setColor(0,0,0,0.6)
+            love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+            love.graphics.setColor(1,1,1)
+            love.graphics.printf("CONGRATULATIONS! All levels cleared without dying.", 0, 200, love.graphics.getWidth(), "center")
+            love.graphics.printf("Press R to replay or M to return to menu", 0, 240, love.graphics.getWidth(), "center")
+            -- summary
+            local elapsed = 0
+            if runStartTime and runStartTime > 0 then elapsed = love.timer.getTime() - runStartTime end
+            love.graphics.printf(string.format("Time: %.1fs    Kills: %d", elapsed, runKills), 0, 280, love.graphics.getWidth(), "center")
+            -- Buttons
+            local bw, bh = 180, 36
+            local cx = love.graphics.getWidth() / 2
+            local bx1 = cx - bw - 10
+            local bx2 = cx + 10
+            local by = 330
+            -- New Game button
+            local mx, my = love.mouse.getPosition()
+            local hover1 = mx >= bx1 and mx <= bx1 + bw and my >= by and my <= by + bh
+            local hover2 = mx >= bx2 and mx <= bx2 + bw and my >= by and my <= by + bh
+            love.graphics.setColor(hover1 and {0.2,0.7,0.2} or {0.1,0.5,0.1})
+            love.graphics.rectangle("fill", bx1, by, bw, bh)
+            love.graphics.setColor(1,1,1)
+            love.graphics.printf("New Game", bx1, by + 8, bw, "center")
+            -- Back to Menu button
+            love.graphics.setColor(hover2 and {0.7,0.2,0.2} or {0.5,0.1,0.1})
+            love.graphics.rectangle("fill", bx2, by, bw, bh)
+            love.graphics.setColor(1,1,1)
+            love.graphics.printf("Back to Menu", bx2, by + 8, bw, "center")
+        end
     end
 end
 
@@ -74,8 +108,18 @@ function love.keypressed(key)
                     level:loadScript(script)
                     -- ensure level knows player
                     level.player = player
-                    -- reset player
+                    -- reset player (fresh run)
                     player.x = 100; player.y = 100; player.vx = 0; player.vy = 0; player.bullets = {}
+                    player.halfHearts = player.maxHalfHearts
+                    player.invulnTime = 0
+                    player.dead = false
+                    runHasDied = false
+                    -- start run stats
+                    runStartTime = love.timer.getTime()
+                    runKills = 0
+                    level.onKill = function(_, enemy, byPlayer)
+                        if byPlayer then runKills = runKills + 1 end
+                    end
                     currentLevelIndex = idx
                     -- hook completion to advance
                     level.onComplete = function()
@@ -88,13 +132,21 @@ function love.keypressed(key)
                                 level:loadScript(script2)
                                 level.player = player
                                 player.x = 100; player.y = 100; player.vx = 0; player.vy = 0; player.bullets = {}
+                                -- keep run stats and attach onKill for the new level
+                                level.onKill = function(_, enemy, byPlayer)
+                                    if byPlayer then runKills = runKills + 1 end
+                                end
                                 currentLevelIndex = nextIdx
                             else
                                 gameState = "menu"
                             end
                         else
-                            -- no more levels; go back to menu
-                            gameState = "menu"
+                            -- no more levels: if player never died during the run, show finished screen
+                            if not runHasDied then
+                                gameState = "finished"
+                            else
+                                gameState = "menu"
+                            end
                         end
                     end
                     gameState = "playing"
@@ -110,7 +162,7 @@ function love.keypressed(key)
         player:jump()
     end
     if key == "r" then
-        -- if game over, restart current level; otherwise, reset level in-play
+        -- if game over, restart current level; if finished, restart campaign; otherwise reset level in-play
         if gameState == "gameover" then
             -- restart level: reload the current script
             local info = levelsList[currentLevelIndex]
@@ -121,6 +173,35 @@ function love.keypressed(key)
                     level.player = player
                     player = Player.new(100, 100, level)
                     level.player = player
+                    runHasDied = false
+                    runStartTime = love.timer.getTime()
+                    runKills = 0
+                    level.onKill = function(_, enemy, byPlayer)
+                        if byPlayer then runKills = runKills + 1 end
+                    end
+                    gameState = "playing"
+                else
+                    gameState = "menu"
+                end
+            else
+                gameState = "menu"
+            end
+        elseif gameState == "finished" then
+            -- replay campaign from first level
+            local info = levelsList[1]
+            if info then
+                local ok, script = pcall(require, info.module)
+                if ok and script then
+                    currentLevelIndex = 1
+                    level:loadScript(script)
+                    player = Player.new(100, 100, level)
+                    level.player = player
+                    runHasDied = false
+                    runStartTime = love.timer.getTime()
+                    runKills = 0
+                    level.onKill = function(_, enemy, byPlayer)
+                        if byPlayer then runKills = runKills + 1 end
+                    end
                     gameState = "playing"
                 else
                     gameState = "menu"
@@ -142,13 +223,47 @@ function love.keypressed(key)
             end
         end
     end
-    if key == "m" and gameState == "gameover" then
+    if key == "m" and (gameState == "gameover" or gameState == "finished") then
         gameState = "menu"
     end
 end
 
 function love.mousepressed(x, y, button)
     if button == 1 then -- left click
+        if gameState == "finished" then
+            local bw, bh = 180, 36
+            local cx = love.graphics.getWidth() / 2
+            local bx1 = cx - bw - 10
+            local bx2 = cx + 10
+            local by = 330
+            if x >= bx1 and x <= bx1 + bw and y >= by and y <= by + bh then
+                -- New Game: replay campaign from level 1
+                local info = levelsList[1]
+                if info then
+                    local ok, script = pcall(require, info.module)
+                    if ok and script then
+                        currentLevelIndex = 1
+                        level:loadScript(script)
+                        player = Player.new(100, 100, level)
+                        level.player = player
+                        runHasDied = false
+                        runStartTime = love.timer.getTime()
+                        runKills = 0
+                        level.onKill = function(_, enemy, byPlayer)
+                            if byPlayer then runKills = runKills + 1 end
+                        end
+                        gameState = "playing"
+                        return
+                    end
+                end
+                gameState = "menu"
+                return
+            end
+            if x >= bx2 and x <= bx2 + bw and y >= by and y <= by + bh then
+                gameState = "menu"
+                return
+            end
+        end
         if player then
             player.firing = true
             player.lastMouseX = x
