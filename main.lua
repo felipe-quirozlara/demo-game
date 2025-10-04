@@ -8,6 +8,8 @@ local gameState = "menu" -- or "playing"
 local runHasDied = false -- track whether the player has died during the current run
 local runStartTime = 0
 local runKills = 0
+local levelCompleteMode = false
+local levelCompleteTimer = 0
 local levelsList = {
     { id = 1, name = "Level 1", module = "levels.level1" },
     { id = 2, name = "Level 2", module = "levels.level2" },
@@ -29,6 +31,40 @@ function love.update(dt)
         player:update(dt)
         if level and level.update then
             level:update(dt)
+        end
+        -- if we're in the level-complete waiting window, count down
+        if levelCompleteMode then
+            levelCompleteTimer = levelCompleteTimer - dt
+            if levelCompleteTimer <= 0 then
+                -- time expired: try to advance to next level if available
+                levelCompleteMode = false
+                local nextIdx = currentLevelIndex and (currentLevelIndex + 1) or nil
+                local nextInfo = nextIdx and levelsList[nextIdx] or nil
+                if nextInfo then
+                    local ok2, script2 = pcall(require, nextInfo.module)
+                    if ok2 and script2 then
+                        level:loadScript(script2)
+                        level.player = player
+                        player.x = 100; player.y = 100; player.vx = 0; player.vy = 0; player.bullets = {}
+                        level.onKill = function(_, enemy, byPlayer)
+                            if byPlayer then runKills = runKills + 1 end
+                        end
+                        currentLevelIndex = nextIdx
+                    else
+                        if not runHasDied then
+                            gameState = "finished"
+                        else
+                            gameState = "menu"
+                        end
+                    end
+                else
+                    if not runHasDied then
+                        gameState = "finished"
+                    else
+                        gameState = "menu"
+                    end
+                end
+            end
         end
         -- switch to game over when player dies
         if player and player.dead then
@@ -58,6 +94,13 @@ function love.draw()
             love.graphics.setColor(1,1,1)
             love.graphics.printf("GAME OVER", 0, 200, love.graphics.getWidth(), "center")
             love.graphics.printf("Press R to restart level, M to return to menu", 0, 240, love.graphics.getWidth(), "center")
+        end
+        if levelCompleteMode then
+            love.graphics.setColor(0,0,0,0.6)
+            love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+            love.graphics.setColor(1,1,1)
+            love.graphics.printf("LEVEL COMPLETE! Press 'C' to continue to the next level.", 0, 200, love.graphics.getWidth(), "center")
+            love.graphics.printf(string.format("Time left: %.1fs — Hurry and collect dropped money!", math.max(0, levelCompleteTimer)), 0, 240, love.graphics.getWidth(), "center")
         end
         if gameState == "finished" then
             love.graphics.setColor(0,0,0,0.6)
@@ -123,31 +166,11 @@ function love.keypressed(key)
                     currentLevelIndex = idx
                     -- hook completion to advance
                     level.onComplete = function()
-                        -- try to load next level
-                        local nextIdx = currentLevelIndex + 1
-                        local nextInfo = levelsList[nextIdx]
-                        if nextInfo then
-                            local ok2, script2 = pcall(require, nextInfo.module)
-                            if ok2 and script2 then
-                                level:loadScript(script2)
-                                level.player = player
-                                player.x = 100; player.y = 100; player.vx = 0; player.vy = 0; player.bullets = {}
-                                -- keep run stats and attach onKill for the new level
-                                level.onKill = function(_, enemy, byPlayer)
-                                    if byPlayer then runKills = runKills + 1 end
-                                end
-                                currentLevelIndex = nextIdx
-                            else
-                                gameState = "menu"
-                            end
-                        else
-                            -- no more levels: if player never died during the run, show finished screen
-                            if not runHasDied then
-                                gameState = "finished"
-                            else
-                                gameState = "menu"
-                            end
-                        end
+                        -- enter a short waiting window (10 seconds) where player must press 'c' to continue
+                        levelCompleteMode = true
+                        levelCompleteTimer = 10
+                        -- during this time the level is considered completed but the finished screen does not show yet
+                        -- pressing 'c' will immediately try to advance to the next level
                     end
                     gameState = "playing"
                 else
@@ -160,6 +183,37 @@ function love.keypressed(key)
     -- allow multiple keys for jump: Space, Up arrow, and W
     if key == "space" or key == "up" or key == "w" then
         player:jump()
+    end
+    if key == "c" and levelCompleteMode then
+        -- try to advance immediately to next level
+        levelCompleteMode = false
+        local nextIdx = currentLevelIndex and (currentLevelIndex + 1) or nil
+        local nextInfo = nextIdx and levelsList[nextIdx] or nil
+        if nextInfo then
+            local ok2, script2 = pcall(require, nextInfo.module)
+            if ok2 and script2 then
+                level:loadScript(script2)
+                level.player = player
+                player.x = 100; player.y = 100; player.vx = 0; player.vy = 0; player.bullets = {}
+                -- keep run stats and attach onKill for the new level
+                level.onKill = function(_, enemy, byPlayer)
+                    if byPlayer then runKills = runKills + 1 end
+                end
+                currentLevelIndex = nextIdx
+                return
+            else
+                gameState = "menu"
+                return
+            end
+        else
+            -- no next level
+            if not runHasDied then
+                gameState = "finished"
+            else
+                gameState = "menu"
+            end
+            return
+        end
     end
     if key == "r" then
         -- if game over, restart current level; if finished, restart campaign; otherwise reset level in-play
