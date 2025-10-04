@@ -44,7 +44,7 @@ function love.mousepressed(x, y, button)
             -- immediate shot
             if player.shoot then player:shoot(x, y) end
             -- start the timer so continuous fire waits full interval
-            player.fireTimer = 1 / (player.fireRate or 8)
+            player.fireTimer = player.fireInterval or (1 / (player.fireRate or 8))
         end
     end
 end

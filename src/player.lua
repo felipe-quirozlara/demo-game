@@ -4,6 +4,7 @@ Player.__index = Player
 local GRAVITY = 1500
 local MOVE_SPEED = 200
 local JUMP_VELOCITY = -650
+local SHOOT_VELOCITY = 600
 
 function Player.new(x, y, level)
     local self = setmetatable({}, Player)
@@ -16,10 +17,13 @@ function Player.new(x, y, level)
     self.onGround = false
     self.bullets = {} -- active bullets
     self.firing = false
-    self.fireRate = 8 -- bullets per second
+    self.fireRate = 4 -- bullets per second (kept for backward compatibility)
+    self.fireInterval = 1 / self.fireRate -- seconds between shots
     self.fireTimer = 0
     self.lastMouseX = 0
     self.lastMouseY = 0
+    -- per-player bullet speed (can be changed externally)
+    self.bulletSpeed = SHOOT_VELOCITY
     self.level = level
     return self
 end
@@ -82,7 +86,7 @@ function Player:update(dt)
     -- firing logic: if firing, spawn bullets at fireRate toward last mouse pos
     if self.firing then
         self.fireTimer = self.fireTimer - dt
-        local interval = 1 / self.fireRate
+        local interval = self.fireInterval or (1 / self.fireRate)
         while self.fireTimer <= 0 do
             -- spawn
             self:shoot(self.lastMouseX, self.lastMouseY)
@@ -120,9 +124,8 @@ function Player:shoot(tx, ty)
     local dy = ty - sy
     local len = math.sqrt(dx * dx + dy * dy)
     if len == 0 then len = 1 end
-    local speed = 600
-    local vx = (dx / len) * speed
-    local vy = (dy / len) * speed
+    local vx = (dx / len) * self.bulletSpeed
+    local vy = (dy / len) * self.bulletSpeed
     local bullet = { x = sx, y = sy, vx = vx, vy = vy, r = 4, life = 2 }
     table.insert(self.bullets, bullet)
 end
