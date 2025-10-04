@@ -1,0 +1,130 @@
+local Player = {}
+Player.__index = Player
+
+local GRAVITY = 1500
+local MOVE_SPEED = 200
+local JUMP_VELOCITY = -650
+
+function Player.new(x, y, level)
+    local self = setmetatable({}, Player)
+    self.x = x
+    self.y = y
+    self.w = 32
+    self.h = 48
+    self.vx = 0
+    self.vy = 0
+    self.onGround = false
+    self.bullets = {} -- active bullets
+    self.firing = false
+    self.fireRate = 8 -- bullets per second
+    self.fireTimer = 0
+    self.lastMouseX = 0
+    self.lastMouseY = 0
+    self.level = level
+    return self
+end
+
+function Player:update(dt)
+    -- Horizontal movement
+    local left = love.keyboard.isDown("a") or love.keyboard.isDown("left")
+    local right = love.keyboard.isDown("d") or love.keyboard.isDown("right")
+
+    if left then
+        self.vx = -MOVE_SPEED
+    elseif right then
+        self.vx = MOVE_SPEED
+    else
+        self.vx = 0
+    end
+
+    -- Apply gravity
+    self.vy = self.vy + GRAVITY * dt
+
+    -- Integrate position
+    local nextX = self.x + self.vx * dt
+    local nextY = self.y + self.vy * dt
+
+    -- Simple AABB collision with level platforms
+    self.onGround = false
+    -- Check vertical collisions
+    local collidedY, correctedY, vy, landed = self.level:checkVerticalCollision(self, nextY)
+    if collidedY then
+        nextY = correctedY
+        self.vy = vy
+        -- if we landed on a platform, mark onGround true
+        if landed then
+            self.onGround = true
+        end
+    end
+
+    -- Check horizontal collisions
+    local collidedX, correctedX = self.level:checkHorizontalCollision(self, nextX)
+    if collidedX then
+        nextX = correctedX
+        self.vx = 0
+    end
+
+    self.x = nextX
+    self.y = nextY
+
+    -- update bullets
+    for i = #self.bullets, 1, -1 do
+        local b = self.bullets[i]
+        b.x = b.x + b.vx * dt
+        b.y = b.y + b.vy * dt
+        b.life = b.life - dt
+        -- remove if off-screen or life expired
+        if b.x < -50 or b.x > love.graphics.getWidth() + 50 or b.y < -50 or b.y > love.graphics.getHeight() + 50 or b.life <= 0 then
+            table.remove(self.bullets, i)
+        end
+    end
+
+    -- firing logic: if firing, spawn bullets at fireRate toward last mouse pos
+    if self.firing then
+        self.fireTimer = self.fireTimer - dt
+        local interval = 1 / self.fireRate
+        while self.fireTimer <= 0 do
+            -- spawn
+            self:shoot(self.lastMouseX, self.lastMouseY)
+            self.fireTimer = self.fireTimer + interval
+        end
+    else
+        -- reset timer so we fire immediately when starting again
+        self.fireTimer = 0
+    end
+end
+
+function Player:jump()
+    if self.onGround then
+        self.vy = JUMP_VELOCITY
+        self.onGround = false
+    end
+end
+
+function Player:draw()
+    love.graphics.setColor(0.2, 0.6, 1)
+    love.graphics.rectangle("fill", math.floor(self.x), math.floor(self.y), self.w, self.h)
+
+    -- draw bullets
+    love.graphics.setColor(1, 0.6, 0.2)
+    for _, b in ipairs(self.bullets) do
+        love.graphics.circle("fill", b.x, b.y, b.r)
+    end
+end
+
+function Player:shoot(tx, ty)
+    -- spawn a bullet from the player's center toward target (tx, ty)
+    local sx = self.x + self.w / 2
+    local sy = self.y + self.h / 2
+    local dx = tx - sx
+    local dy = ty - sy
+    local len = math.sqrt(dx * dx + dy * dy)
+    if len == 0 then len = 1 end
+    local speed = 600
+    local vx = (dx / len) * speed
+    local vy = (dy / len) * speed
+    local bullet = { x = sx, y = sy, vx = vx, vy = vy, r = 4, life = 2 }
+    table.insert(self.bullets, bullet)
+end
+
+return Player
