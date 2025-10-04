@@ -1,3 +1,5 @@
+local Enemy = require("src.enemy")
+
 local Level = {}
 Level.__index = Level
 
@@ -11,6 +13,11 @@ function Level.new()
         {560, 280, 120, 20},
         {50, 320, 80, 20}
     }
+    -- static enemies: x, y, w, h, hits
+    self.enemies = {
+        Enemy.new(300, 520-32, 32, 32, 2),
+        Enemy.new(500, 520-32, 32, 32, 3),
+    }
     return self
 end
 
@@ -19,6 +26,14 @@ function Level:draw()
     for _, p in ipairs(self.platforms) do
         love.graphics.rectangle("fill", p[1], p[2], p[3], p[4])
     end
+    -- draw enemies
+    for _, e in ipairs(self.enemies) do
+        e:draw()
+    end
+end
+
+function Level:removeEnemy(index)
+    table.remove(self.enemies, index)
 end
 
 -- Collision helpers

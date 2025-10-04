@@ -77,10 +77,30 @@ function Player:update(dt)
         b.x = b.x + b.vx * dt
         b.y = b.y + b.vy * dt
         b.life = b.life - dt
+        local removed = false
+        -- check collision with enemies
+        if self.level and self.level.enemies then
+            for ei = #self.level.enemies, 1, -1 do
+                local e = self.level.enemies[ei]
+                if b.x + b.r > e.x and b.x - b.r < e.x + e.w and b.y + b.r > e.y and b.y - b.r < e.y + e.h then
+                    -- hit
+                    e.hitsRemaining = e.hitsRemaining - 1
+                    table.remove(self.bullets, i)
+                    removed = true
+                    if e.hitsRemaining <= 0 then
+                        self.level:removeEnemy(ei)
+                    end
+                    break
+                end
+            end
+        end
+        if removed then goto continue_bullet_loop end
+
         -- remove if off-screen or life expired
         if b.x < -50 or b.x > love.graphics.getWidth() + 50 or b.y < -50 or b.y > love.graphics.getHeight() + 50 or b.life <= 0 then
             table.remove(self.bullets, i)
         end
+        ::continue_bullet_loop::
     end
 
     -- firing logic: if firing, spawn bullets at fireRate toward last mouse pos
