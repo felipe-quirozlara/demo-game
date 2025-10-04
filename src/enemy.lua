@@ -9,6 +9,7 @@ function Enemy.new(x, y, w, h, hits)
     self.h = h or 32
     self.hitsRemaining = hits or 2
     self.maxHits = hits or 2
+    self.type = "grunt"
     return self
 end
 
@@ -20,6 +21,8 @@ function Enemy:draw()
         love.graphics.setColor(0.2, 1, 0.2) -- green
     elseif self.maxHits == 5 then
         love.graphics.setColor(0.2, 0.4, 1) -- blue
+    elseif self.maxHits == 10 then
+        love.graphics.setColor(0.9, 0.4, 0.8) -- boss: purple
     else
         love.graphics.setColor(1, 0.2, 0.2)
     end

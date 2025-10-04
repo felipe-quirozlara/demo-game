@@ -54,6 +54,68 @@ function Level:spawnRandomEnemies(n)
     end
 end
 
+-- spawn N enemies, optionally all with a specific hits value
+function Level:spawnRandomEnemiesWithHits(n, hits)
+    n = n or 1
+    for i=1,n do
+        -- choose a platform to place enemy on (include ground)
+        local p = self.platforms[math.random(1, #self.platforms)]
+        local ex, ey
+        local attempts = 8
+        for a = 1, attempts do
+            ex = math.random(p[1], p[1] + p[3] - 32)
+            ey = p[2] - 32
+            if not self.player or not rectsOverlap(ex, ey, 32, 32, self.player.x, self.player.y, self.player.w, self.player.h) then
+                break
+            end
+        end
+        table.insert(self.enemies, Enemy.new(ex, ey, 32, 32, hits))
+    end
+end
+
+local function typeToHits(t)
+    if not t then return nil end
+    if t == "grunt" then return 2 end
+    if t == "soldier" then return 3 end
+    if t == "heavy" then return 5 end
+    if t == "boss" then return 10 end
+    return tonumber(t) or nil
+end
+
+-- load a level script (table) with initial spawns and timed events
+function Level:loadScript(script)
+    -- clear existing
+    self.enemies = {}
+    self.spawnQueue = {}
+    self.spawnTimer = 0
+    -- if the script defines platforms, use them; otherwise keep current/default
+    if script.platforms then
+        self.platforms = script.platforms
+    end
+    -- process initial immediate spawns
+    if script.initial then
+        for _, entry in ipairs(script.initial) do
+            local hits = entry.hits or typeToHits(entry.type) or 2
+            local count = entry.count or 1
+            if entry.type == "boss" then
+                -- spawn boss(s) with 10 hits
+                self:spawnRandomEnemiesWithHits(count, 10)
+            else
+                self:spawnRandomEnemiesWithHits(count, hits)
+            end
+        end
+    end
+    -- schedule events
+    if script.events then
+        for _, ev in ipairs(script.events) do
+            local spec = { type = ev.type, hits = typeToHits(ev.type) }
+            -- allow overriding via ev.hits
+            if ev.hits then spec.hits = ev.hits end
+            self:scheduleSpawn(ev.time, spec)
+        end
+    end
+end
+
 -- schedule a specific spawn in seconds_from_now with a spec table
 function Level:scheduleSpawn(seconds_from_now, spec)
     table.insert(self.spawnQueue, { time = seconds_from_now, spec = spec })
