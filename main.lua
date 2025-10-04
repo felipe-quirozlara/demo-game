@@ -133,21 +133,21 @@ function love.draw()
     love.graphics.setColor(1,1,1)
     love.graphics.printf("Upgrades", ubx, uby + 8, ubw, "center")
     -- Shop: Red Burst weapon button
-        local shopY = by + bh + 18
-        local sbw, sbh = 220, 40
-        local sbx = cx - sbw/2
-        local sby = shopY
-        local owned = player:hasUpgrade("red_burst")
-        local price = 50
-        local shopHover = mx >= sbx and mx <= sbx + sbw and my >= sby and my <= sby + sbh
-        love.graphics.setColor(shopHover and {0.6,0.1,0.1} or {0.4,0.1,0.1})
-        love.graphics.rectangle("fill", sbx, sby, sbw, sbh)
-        love.graphics.setColor(1,1,1)
-        if owned then
-            love.graphics.printf("Owned: Red Burst", sbx, sby + 12, sbw, "center")
-        else
-            love.graphics.printf(string.format("Buy Red Burst (%d)", price), sbx, sby + 12, sbw, "center")
-        end
+        -- local shopY = by + bh + 18
+        -- local sbw, sbh = 220, 40
+        -- local sbx = cx - sbw/2
+        -- local sby = shopY
+        -- local owned = player:hasUpgrade("red_burst")
+        -- local price = 50
+        -- local shopHover = mx >= sbx and mx <= sbx + sbw and my >= sby and my <= sby + sbh
+        -- love.graphics.setColor(shopHover and {0.6,0.1,0.1} or {0.4,0.1,0.1})
+        -- love.graphics.rectangle("fill", sbx, sby, sbw, sbh)
+        -- love.graphics.setColor(1,1,1)
+        -- if owned then
+        --     love.graphics.printf("Owned: Red Burst", sbx, sby + 12, sbw, "center")
+        -- else
+        --     love.graphics.printf(string.format("Buy Red Burst (%d)", price), sbx, sby + 12, sbw, "center")
+        -- end
         -- Debug overlay
         love.graphics.setColor(1,1,1)
         love.graphics.print(string.format("Mouse: %d, %d", mx, my), 10, love.graphics.getHeight() - 40)

@@ -67,22 +67,22 @@ end
 function Player:saveToDisk()
     if not love.filesystem then return end
     local tbl = { money = self.money, upgrades = self.upgrades, weapon = self.weapon }
-    -- simple table->string serializer for the small save
-    local function serialize(t)
-        local parts = {"{"}
-        for k,v in pairs(t) do
-            local key = k
-            if type(key) == "string" then key = string.format('%q', key) end
-            local val
-            if type(v) == "number" or type(v) == "boolean" then
-                val = tostring(v)
-            else
-                val = string.format('%q', tostring(v))
+    -- improved table->string serializer for nested tables
+    local function serialize(val)
+        if type(val) == "table" then
+            local parts = {"{"}
+            for k,v in pairs(val) do
+                local key
+                if type(k) == "string" then key = string.format('%q', k) else key = tostring(k) end
+                table.insert(parts, string.format("[%s]=%s,", key, serialize(v)))
             end
-            table.insert(parts, string.format("[%s]=%s,", key, val))
+            table.insert(parts, "}")
+            return table.concat(parts)
+        elseif type(val) == "number" or type(val) == "boolean" then
+            return tostring(val)
+        else
+            return string.format('%q', tostring(val))
         end
-        table.insert(parts, "}")
-        return table.concat(parts)
     end
     local out = "return " .. serialize(tbl)
     love.filesystem.write(self._saveFilename, out)
