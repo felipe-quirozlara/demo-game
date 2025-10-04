@@ -13,12 +13,74 @@ function Level.new()
         {560, 280, 120, 20},
         {50, 320, 80, 20}
     }
-    -- static enemies: x, y, w, h, hits
-    self.enemies = {
-        Enemy.new(300, 520-32, 32, 32, 2),
-        Enemy.new(500, 520-32, 32, 32, 3),
-    }
+    -- enemies list (initially empty)
+    self.enemies = {}
+    -- spawn system: queued spawn events and random spawn timer
+    self.spawnQueue = {} -- { {time=seconds_from_now, spec={...}} }
+    self.spawnTimer = 0
+    self.randomSpawnInterval = 2 -- spawn every N seconds randomly
+    -- optionally populate with a few initial enemies
+    self:spawnRandomEnemies(2)
     return self
+end
+
+-- spawn N enemies at random horizontal positions on the ground/platforms
+function Level:spawnRandomEnemies(n)
+    n = n or 4
+    local w,h = love.graphics.getWidth(), love.graphics.getHeight()
+    for i=1,n do
+        -- choose a platform to place enemy on (include ground)
+        local p = self.platforms[math.random(1, #self.platforms)]
+        local ex = math.random(p[1], p[1] + p[3] - 32)
+        local ey = p[2] - 32
+        -- choose hits from allowed set {2,3,5}
+        local choices = {2,3,5}
+        local hits = choices[math.random(1, #choices)]
+        table.insert(self.enemies, Enemy.new(ex, ey, 32, 32, hits))
+    end
+end
+
+-- schedule a specific spawn in seconds_from_now with a spec table
+function Level:scheduleSpawn(seconds_from_now, spec)
+    table.insert(self.spawnQueue, { time = seconds_from_now, spec = spec })
+end
+
+-- update the spawn system: call from main update loop
+function Level:update(dt)
+    -- process spawn queue
+    for i = #self.spawnQueue, 1, -1 do
+        local ev = self.spawnQueue[i]
+        ev.time = ev.time - dt
+        if ev.time <= 0 then
+            -- spawn using spec or random
+            local s = ev.spec or {}
+            local hits = s.hits or ({2,3,5})[math.random(1,3)]
+            local ex = s.x
+            local ey = s.y
+            if not ex or not ey then
+                -- place on a random platform
+                local p = self.platforms[math.random(1, #self.platforms)]
+                ex = math.random(p[1], p[1] + p[3] - 32)
+                ey = p[2] - 32
+            end
+            table.insert(self.enemies, Enemy.new(ex, ey, s.w or 32, s.h or 32, hits))
+            table.remove(self.spawnQueue, i)
+        end
+    end
+
+    -- random spawner
+    self.spawnTimer = self.spawnTimer - dt
+    if self.spawnTimer <= 0 then
+        self.spawnTimer = self.randomSpawnInterval
+        -- small chance to spawn 0..2 enemies
+        local count = math.random(0,2)
+        self:spawnRandomEnemies(count)
+    end
+end
+
+function Level:reset()
+    self.enemies = {}
+    self:spawnRandomEnemies(4)
 end
 
 function Level:draw()

@@ -15,6 +15,9 @@ end
 
 function love.update(dt)
     player:update(dt)
+    if level and level.update then
+        level:update(dt)
+    end
 end
 
 function love.draw()
@@ -32,6 +35,19 @@ function love.keypressed(key)
     -- allow multiple keys for jump: Space, Up arrow, and W
     if key == "space" or key == "up" or key == "w" then
         player:jump()
+    end
+    if key == "r" then
+        if level and level.reset then
+            level:reset()
+        end
+        -- clear player bullets and reset position
+        if player then
+            player.bullets = {}
+            player.x = 100
+            player.y = 100
+            player.vx = 0
+            player.vy = 0
+        end
     end
 end
 
