@@ -12,11 +12,14 @@ return {
     initial = {
         { type = "grunt", count = 2 }
     },
-    -- timed events: time in seconds from level start
+    -- scripted counts and order: 10 basic (grunt), 5 medium (soldier), 1 boss
+    counts = { grunt = 10, soldier = 5, boss = 1 },
+    order = { "grunt", "soldier", "boss" },
+    spawnInterval = 0.8,
+    -- disable random spawns for fully scripted level
+    randomSpawns = false,
+    -- timed events (optional)
     events = {
-        { time = 5, type = "grunt" },
-        { time = 8, type = "soldier" },
-        { time = 12, type = "grunt" },
         { time = 20, type = "boss" },
     }
 }

@@ -8,14 +8,14 @@ return {
         {520, 320, 120, 20},
         {680, 240, 80, 20}
     },
+    counts = { grunt = 15, soldier = 7, boss = 1 },
+    order = { "grunt", "grunt", "soldier", "grunt", "boss" },
+    spawnInterval = 0.6,
+    randomSpawns = false,
     initial = {
         { type = "grunt", count = 3 },
-        { type = "soldier", count = 1 },
     },
     events = {
-        { time = 4, type = "grunt" },
-        { time = 6, type = "grunt" },
-        { time = 10, type = "soldier" },
         { time = 18, type = "boss" },
     }
 }

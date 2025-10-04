@@ -26,6 +26,10 @@ function Level.new()
     self.enemySpawnInterval = 4 -- spawn one enemy every N seconds
     -- backward-compatible alias
     self.randomSpawnInterval = self.enemySpawnInterval
+    -- script tracking
+    self.scriptTotalSpawns = 0
+    self.scriptActive = false
+    self.completed = false
     return self
 end
 
@@ -92,16 +96,24 @@ function Level:loadScript(script)
     if script.platforms then
         self.platforms = script.platforms
     end
+    -- reset script tracking
+    self.scriptTotalSpawns = 0
+    self.scriptActive = true
+    self.completed = false
+    -- control random spawns
+    if script.randomSpawns == false then
+        self.randomSpawnsEnabled = false
+    else
+        self.randomSpawnsEnabled = true
+    end
     -- process initial immediate spawns
     if script.initial then
         for _, entry in ipairs(script.initial) do
             local hits = entry.hits or typeToHits(entry.type) or 2
             local count = entry.count or 1
-            if entry.type == "boss" then
-                -- spawn boss(s) with 10 hits
-                self:spawnRandomEnemiesWithHits(count, 10)
-            else
-                self:spawnRandomEnemiesWithHits(count, hits)
+            for i=1,count do
+                self:scheduleSpawn(0, { type = entry.type, hits = hits })
+                self.scriptTotalSpawns = self.scriptTotalSpawns + 1
             end
         end
     end
@@ -112,6 +124,20 @@ function Level:loadScript(script)
             -- allow overriding via ev.hits
             if ev.hits then spec.hits = ev.hits end
             self:scheduleSpawn(ev.time, spec)
+            self.scriptTotalSpawns = self.scriptTotalSpawns + 1
+        end
+    end
+    -- if script defines counts and order, schedule them in sequence
+    if script.counts and script.order then
+        local interval = script.spawnInterval or self.enemySpawnInterval or 1
+        local ttime = 0
+        for _, typ in ipairs(script.order) do
+            local cnt = script.counts[typ] or 0
+            for i=1,cnt do
+                self:scheduleSpawn(ttime, { type = typ, hits = typeToHits(typ) })
+                self.scriptTotalSpawns = self.scriptTotalSpawns + 1
+                ttime = ttime + interval
+            end
         end
     end
 end
@@ -157,15 +183,27 @@ function Level:update(dt)
             end
             table.insert(self.enemies, Enemy.new(ex, ey, s.w or 32, s.h or 32, hits))
             table.remove(self.spawnQueue, i)
+            if self.scriptActive and self.scriptTotalSpawns > 0 then
+                self.scriptTotalSpawns = self.scriptTotalSpawns - 1
+            end
         end
     end
 
-    -- automatic spawner: spawn one enemy each interval
-    self.spawnTimer = self.spawnTimer - dt
-    if self.spawnTimer <= 0 then
-        self.spawnTimer = self.enemySpawnInterval or self.randomSpawnInterval
-        -- spawn single enemy at random
-        self:spawnRandomEnemies(1)
+    -- automatic spawner: spawn one enemy each interval (if enabled)
+    if self.randomSpawnsEnabled ~= false then
+        self.spawnTimer = self.spawnTimer - dt
+        if self.spawnTimer <= 0 then
+            self.spawnTimer = self.enemySpawnInterval or self.randomSpawnInterval
+            -- spawn single enemy at random
+            self:spawnRandomEnemies(1)
+        end
+    end
+
+    -- check completion: if script was active and all scripted spawns have happened and no enemies left
+    if self.scriptActive and self.scriptTotalSpawns <= 0 and #self.enemies == 0 then
+        self.scriptActive = false
+        self.completed = true
+        if self.onComplete then pcall(self.onComplete, self) end
     end
 end
 

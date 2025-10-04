@@ -9,6 +9,7 @@ local levelsList = {
     { id = 1, name = "Level 1", module = "levels.level1" },
     { id = 2, name = "Level 2", module = "levels.level2" },
 }
+local currentLevelIndex = nil
 
 function love.load()
     love.window.setTitle("Simple Platformer")
@@ -64,6 +65,27 @@ function love.keypressed(key)
                     level.player = player
                     -- reset player
                     player.x = 100; player.y = 100; player.vx = 0; player.vy = 0; player.bullets = {}
+                    currentLevelIndex = idx
+                    -- hook completion to advance
+                    level.onComplete = function()
+                        -- try to load next level
+                        local nextIdx = currentLevelIndex + 1
+                        local nextInfo = levelsList[nextIdx]
+                        if nextInfo then
+                            local ok2, script2 = pcall(require, nextInfo.module)
+                            if ok2 and script2 then
+                                level:loadScript(script2)
+                                level.player = player
+                                player.x = 100; player.y = 100; player.vx = 0; player.vy = 0; player.bullets = {}
+                                currentLevelIndex = nextIdx
+                            else
+                                gameState = "menu"
+                            end
+                        else
+                            -- no more levels; go back to menu
+                            gameState = "menu"
+                        end
+                    end
                     gameState = "playing"
                 else
                     print("Failed to load level script:", info.module)
