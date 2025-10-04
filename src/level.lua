@@ -32,7 +32,13 @@ function Level.new()
     self.completed = false
     self.groupsMode = false
     self.currentScript = nil
+    -- global multiplier to scale enemy jump heights (1.0 = unchanged)
+    self.enemyJumpMultiplier = 1.0
     return self
+end
+
+function Level:setEnemyJumpMultiplier(m)
+    self.enemyJumpMultiplier = m or 1.0
 end
 
 -- spawn N enemies at random horizontal positions on the ground/platforms
@@ -268,6 +274,18 @@ function Level:update(dt)
     end
 
     -- check completion: if script was active and all scripted spawns have happened and no enemies left
+    -- First, update enemies and remove those flagged for removal (fallen off platforms)
+    for i = #self.enemies, 1, -1 do
+        local e = self.enemies[i]
+        if e and e.update then
+            pcall(e.update, e, dt, self)
+        end
+        if e and e.remove then
+            -- use removeEnemy so group death counters are maintained
+            self:removeEnemy(i)
+        end
+    end
+
     if self.scriptActive and self.scriptTotalSpawns <= 0 and #self.enemies == 0 then
         self.scriptActive = false
         self.completed = true
