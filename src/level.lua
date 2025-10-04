@@ -109,6 +109,8 @@ function Level:loadScript(script)
     if script.platforms then
         self.platforms = script.platforms
     end
+    -- coin values by enemy type (script may define)
+    self.coinValues = script.coinValues or { grunt = 1, soldier = 2, heavy = 4, boss = 10 }
     -- reset script tracking
     self.scriptTotalSpawns = 0
     self.scriptActive = true
@@ -161,6 +163,7 @@ function Level:loadScript(script)
                 hits = hits,
                 count = g.count or 1,
                 requiredPercent = g.requiredPercent or 1.0,
+                coin = g.coin or nil,
                 spawned = 0,
                 deaths = 0,
             }
@@ -225,6 +228,7 @@ function Level:update(dt)
                 end
             end
             local en = Enemy.new(ex, ey, s.w or 32, s.h or 32, hits)
+            if s.coin then en.coin = s.coin end
             -- if the scheduled spawn carried a group tag, assign it and increment group's spawned count
             if s.group and self.groups and self.groups[s.group] then
                 en.group = s.group
@@ -258,7 +262,7 @@ function Level:update(dt)
             if self.groupSpawnTimer <= 0 then
                 self.groupSpawnTimer = self.groupSpawnInterval
                 -- schedule one from group and tag with group index; we increment spawned when processed
-                self:scheduleSpawn(0, { type = g.type, hits = g.hits, group = self.currentGroupIndex })
+                    self:scheduleSpawn(0, { type = g.type, hits = g.hits, group = self.currentGroupIndex, coin = g.coin })
                 -- note: scriptTotalSpawns was already counted when loading
             end
         else
@@ -351,6 +355,14 @@ function Level:removeEnemy(index, byPlayer)
         self.kills = (self.kills or 0) + 1
         if byPlayer then
             self.killsByPlayer = (self.killsByPlayer or 0) + 1
+            -- award coins to player based on enemy type and level coinValues
+            local amount = 0
+            if e and e.type and self.coinValues then
+                amount = self.coinValues[e.type] or 0
+            end
+            if self.player and self.player.money ~= nil then
+                self.player.money = self.player.money + amount
+            end
         end
         if self.onKill then pcall(self.onKill, self, e, byPlayer) end
     end

@@ -28,6 +28,8 @@ function Player.new(x, y, level)
     -- health: 5 hearts represented as 10 half-hearts
     self.maxHalfHearts = 10
     self.halfHearts = self.maxHalfHearts
+    -- money
+    self.money = 0
     -- invulnerability after taking damage (seconds)
     self.invulnTime = 0
     self.invulnDuration = 0.8
@@ -174,6 +176,8 @@ function Player:draw()
         end
     end
     love.graphics.setColor(1,1,1)
+    -- draw money
+    love.graphics.print(string.format("Money: %d", self.money), 10, 32)
 end
 
 function Player:shoot(tx, ty)

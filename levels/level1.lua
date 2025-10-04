@@ -1,6 +1,8 @@
 -- Level 1: gradual random enemies and a small boss later
 return {
     name = "Level 1",
+    -- coin values fallback for this level (type -> coins)
+    coinValues = { grunt = 1, soldier = 3, heavy = 5, boss = 20 },
     platforms = {
         {0, 560, 800, 40}, -- ground
         {150, 450, 120, 20},
@@ -18,9 +20,9 @@ return {
     spawnInterval = 0.8,
     -- grouped spawns: each group has type, count, requiredPercent to proceed
     groups = {
-        { type = "grunt", count = 3, requiredPercent = 0.6 },
-        { type = "soldier", count = 2, requiredPercent = 0.7 },
-        { type = "boss", count = 1, requiredPercent = 1.0 },
+        { type = "grunt", count = 3, requiredPercent = 0.6, coin = 1 },
+        { type = "soldier", count = 2, requiredPercent = 0.7, coin = 4 },
+        { type = "boss", count = 1, requiredPercent = 1.0, coin = 20 },
     },
     -- disable random spawns for fully scripted level
     randomSpawns = false,

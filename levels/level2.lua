@@ -1,6 +1,7 @@
 -- Level 2: heavier waves
 return {
     name = "Level 2",
+    coinValues = { grunt = 1, soldier = 4, heavy = 6, boss = 30 },
     platforms = {
         {0, 560, 800, 40}, -- ground
         {120, 480, 100, 20},
@@ -12,9 +13,9 @@ return {
     order = { "grunt", "grunt", "soldier", "grunt", "boss" },
     spawnInterval = 0.6,
     groups = {
-        { type = "grunt", count = 4, requiredPercent = 0.6 },
-        { type = "soldier", count = 3, requiredPercent = 0.75 },
-        { type = "boss", count = 1, requiredPercent = 1.0 },
+        { type = "grunt", count = 4, requiredPercent = 0.6, coin = 1 },
+        { type = "soldier", count = 3, requiredPercent = 0.75, coin = 5 },
+        { type = "boss", count = 1, requiredPercent = 1.0, coin = 30 },
     },
     randomSpawns = false,
     initial = {
