@@ -30,12 +30,15 @@ function Level.new()
     self.scriptTotalSpawns = 0
     self.scriptActive = false
     self.completed = false
+    self.groupsMode = false
+    self.currentScript = nil
     return self
 end
 
 -- spawn N enemies at random horizontal positions on the ground/platforms
 function Level:spawnRandomEnemies(n)
     n = n or 4
+    if self.groupsMode then return end
     local w,h = love.graphics.getWidth(), love.graphics.getHeight()
     for i=1,n do
         -- choose a platform to place enemy on (include ground)
@@ -61,6 +64,7 @@ end
 -- spawn N enemies, optionally all with a specific hits value
 function Level:spawnRandomEnemiesWithHits(n, hits)
     n = n or 1
+    if self.groupsMode then return end
     for i=1,n do
         -- choose a platform to place enemy on (include ground)
         local p = self.platforms[math.random(1, #self.platforms)]
@@ -100,6 +104,8 @@ function Level:loadScript(script)
     self.scriptTotalSpawns = 0
     self.scriptActive = true
     self.completed = false
+    self.groupsMode = false
+    self.currentScript = script
     -- control random spawns
     if script.randomSpawns == false then
         self.randomSpawnsEnabled = false
@@ -107,29 +113,34 @@ function Level:loadScript(script)
         self.randomSpawnsEnabled = true
     end
     -- process initial immediate spawns
-    if script.initial then
-        for _, entry in ipairs(script.initial) do
-            local hits = entry.hits or typeToHits(entry.type) or 2
-            local count = entry.count or 1
-            for i=1,count do
-                self:scheduleSpawn(0, { type = entry.type, hits = hits })
-                self.scriptTotalSpawns = self.scriptTotalSpawns + 1
+    -- If groups are defined we treat the script as grouped-only and skip initial/events to avoid duplicates
+    if not script.groups then
+        -- process initial immediate spawns
+        if script.initial then
+            for _, entry in ipairs(script.initial) do
+                local hits = entry.hits or typeToHits(entry.type) or 2
+                local count = entry.count or 1
+                for i=1,count do
+                    self:scheduleSpawn(0, { type = entry.type, hits = hits })
+                    self.scriptTotalSpawns = self.scriptTotalSpawns + 1
+                end
             end
         end
-    end
-    -- schedule events
-    if script.events then
-        for _, ev in ipairs(script.events) do
-            local spec = { type = ev.type, hits = typeToHits(ev.type) }
-            -- allow overriding via ev.hits
-            if ev.hits then spec.hits = ev.hits end
-            self:scheduleSpawn(ev.time, spec)
-            self.scriptTotalSpawns = self.scriptTotalSpawns + 1
+        -- schedule events
+        if script.events then
+            for _, ev in ipairs(script.events) do
+                local spec = { type = ev.type, hits = typeToHits(ev.type) }
+                -- allow overriding via ev.hits
+                if ev.hits then spec.hits = ev.hits end
+                self:scheduleSpawn(ev.time, spec)
+                self.scriptTotalSpawns = self.scriptTotalSpawns + 1
+            end
         end
     end
     -- if script defines counts and order, schedule them in sequence
     if script.groups then
         -- groups: an ordered list where each group has { type, count, requiredPercent }
+        self.groupsMode = true
         self.groups = {}
         self.currentGroupIndex = 1
         self.groupSpawnTimer = 0
@@ -205,9 +216,10 @@ function Level:update(dt)
                 end
             end
             local en = Enemy.new(ex, ey, s.w or 32, s.h or 32, hits)
-            -- if currently spawning from groups, assign group index
-            if self.currentGroupIndex and self.groups and self.groups[self.currentGroupIndex] then
-                en.group = self.currentGroupIndex
+            -- if the scheduled spawn carried a group tag, assign it and increment group's spawned count
+            if s.group and self.groups and self.groups[s.group] then
+                en.group = s.group
+                self.groups[s.group].spawned = (self.groups[s.group].spawned or 0) + 1
             end
             table.insert(self.enemies, en)
             table.remove(self.spawnQueue, i)
@@ -236,9 +248,8 @@ function Level:update(dt)
             self.groupSpawnTimer = self.groupSpawnTimer - dt
             if self.groupSpawnTimer <= 0 then
                 self.groupSpawnTimer = self.groupSpawnInterval
-                -- spawn one from group
-                self:scheduleSpawn(0, { type = g.type, hits = g.hits })
-                g.spawned = g.spawned + 1
+                -- schedule one from group and tag with group index; we increment spawned when processed
+                self:scheduleSpawn(0, { type = g.type, hits = g.hits, group = self.currentGroupIndex })
                 -- note: scriptTotalSpawns was already counted when loading
             end
         else
