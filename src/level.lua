@@ -323,7 +323,50 @@ function Level:update(dt)
         self.completed = true
         if self.onComplete then pcall(self.onComplete, self) end
     end
+    
+    -- update coins physics and check pickups
+    if self.coins then
+        for i = #self.coins, 1, -1 do
+            local c = self.coins[i]
+            -- simple physics
+            c.vy = c.vy + 600 * dt
+            c.x = c.x + c.vx * dt
+            c.y = c.y + c.vy * dt
+            -- landing on platforms: if coin intersects platform from above, snap to top and zero vy
+            for _, p in ipairs(self.platforms) do
+                local rx, ry, rw, rh = p[1], p[2], p[3], p[4]
+                if c.x > rx - 8 and c.x < rx + rw + 8 then
+                    if c.y >= ry - 8 and c.y <= ry + 12 then
+                        c.y = ry - 6
+                        c.vy = 0
+                    end
+                end
+            end
+            -- pickup by player: simple overlap with player's rectangle (use coin as small box)
+            if self.player then
+                local px, py, pw, ph = self.player.x, self.player.y, self.player.w, self.player.h
+                if c.x > px and c.x < px + pw and c.y > py and c.y < py + ph then
+                    if self.player.money ~= nil then
+                        self.player.money = self.player.money + (c.amount or 0)
+                    end
+                    table.remove(self.coins, i)
+                end
+            end
+        end
+    end
 end
+
+-- coins: simple pickup entities created when an enemy is killed by player
+-- each coin: { x, y, vx, vy, w, h, amount }
+
+function Level:_spawnCoin(x, y, amount)
+    self.coins = self.coins or {}
+    -- spawn slightly above death point and give small random impulse
+    -- keep coins static on the x-axis (vx = 0)
+    local c = { x = x, y = y - 6, vx = 0, vy = -120 + math.random(-20,20), w = 10, h = 10, amount = amount }
+    table.insert(self.coins, c)
+end
+
 
 function Level:setEnemySpawnInterval(seconds)
     self.enemySpawnInterval = seconds
@@ -344,6 +387,18 @@ function Level:draw()
     for _, e in ipairs(self.enemies) do
         e:draw()
     end
+    -- draw coins as small yellow triangles
+    if self.coins then
+        love.graphics.setColor(1, 0.9, 0.2)
+        for _, c in ipairs(self.coins) do
+            local cx = c.x
+            local cy = c.y
+            local size = 8
+            -- draw an upward triangle centered at (cx,cy)
+            love.graphics.polygon("fill", cx, cy - size/2, cx - size/2, cy + size/2, cx + size/2, cy + size/2)
+        end
+        love.graphics.setColor(1,1,1)
+    end
 end
 
 function Level:removeEnemy(index, byPlayer)
@@ -357,12 +412,19 @@ function Level:removeEnemy(index, byPlayer)
             self.killsByPlayer = (self.killsByPlayer or 0) + 1
             -- award coins to player based on enemy type and level coinValues
             local amount = 0
-            if e and e.type and self.coinValues then
+            if e and e.coin then
+                amount = e.coin
+            elseif e and e.type and self.coinValues then
                 amount = self.coinValues[e.type] or 0
             end
-            if self.player and self.player.money ~= nil then
-                self.player.money = self.player.money + amount
+            -- spawn a coin pickup at enemy position (one per enemy)
+            if amount and amount > 0 then
+                -- spawn visual coin that the player must pick up
+                self:_spawnCoin(e.x + (e.w or 16)/2, e.y + (e.h or 16)/2, amount)
+            else
+                -- still add zero if needed
             end
+            -- do not immediately add to player.money; player must pick it up
         end
         if self.onKill then pcall(self.onKill, self, e, byPlayer) end
     end
