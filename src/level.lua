@@ -3,6 +3,10 @@ local Enemy = require("src.enemy")
 local Level = {}
 Level.__index = Level
 
+local function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh)
+    return ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by
+end
+
 function Level.new()
     local self = setmetatable({}, Level)
     -- Simple list of platforms: {x, y, w, h}
@@ -15,12 +19,13 @@ function Level.new()
     }
     -- enemies list (initially empty)
     self.enemies = {}
-    -- spawn system: queued spawn events and random spawn timer
+    -- spawn system: queued spawn events and spawn timer
     self.spawnQueue = {} -- { {time=seconds_from_now, spec={...}} }
     self.spawnTimer = 0
-    self.randomSpawnInterval = 2 -- spawn every N seconds randomly
-    -- optionally populate with a few initial enemies
-    self:spawnRandomEnemies(2)
+    -- public variable: seconds between each automatic enemy spawn
+    self.enemySpawnInterval = 4 -- spawn one enemy every N seconds
+    -- backward-compatible alias
+    self.randomSpawnInterval = self.enemySpawnInterval
     return self
 end
 
@@ -31,8 +36,17 @@ function Level:spawnRandomEnemies(n)
     for i=1,n do
         -- choose a platform to place enemy on (include ground)
         local p = self.platforms[math.random(1, #self.platforms)]
-        local ex = math.random(p[1], p[1] + p[3] - 32)
-        local ey = p[2] - 32
+        local ex, ey
+        -- try a few times to avoid spawning on the player
+        local attempts = 8
+        for a = 1, attempts do
+            ex = math.random(p[1], p[1] + p[3] - 32)
+            ey = p[2] - 32
+            if not self.player or not rectsOverlap(ex, ey, 32, 32, self.player.x, self.player.y, self.player.w, self.player.h) then
+                break
+            end
+            -- if last attempt and still overlapping, accept it to avoid infinite loop
+        end
         -- choose hits from allowed set {2,3,5}
         local choices = {2,3,5}
         local hits = choices[math.random(1, #choices)]
@@ -62,20 +76,40 @@ function Level:update(dt)
                 local p = self.platforms[math.random(1, #self.platforms)]
                 ex = math.random(p[1], p[1] + p[3] - 32)
                 ey = p[2] - 32
+            else
+                -- ensure spec position doesn't overlap player; if it does, nudge up to attempts
+                if self.player and rectsOverlap(ex, ey, s.w or 32, s.h or 32, self.player.x, self.player.y, self.player.w, self.player.h) then
+                    -- try small nudge attempts to avoid player
+                    local moved = false
+                    for a=1,6 do
+                        ex = ex + math.random(-40,40)
+                        ey = ey + math.random(-40,40)
+                        if not rectsOverlap(ex, ey, s.w or 32, s.h or 32, self.player.x, self.player.y, self.player.w, self.player.h) then
+                            moved = true; break
+                        end
+                    end
+                    if not moved then
+                        -- give up and accept the original spot
+                    end
+                end
             end
             table.insert(self.enemies, Enemy.new(ex, ey, s.w or 32, s.h or 32, hits))
             table.remove(self.spawnQueue, i)
         end
     end
 
-    -- random spawner
+    -- automatic spawner: spawn one enemy each interval
     self.spawnTimer = self.spawnTimer - dt
     if self.spawnTimer <= 0 then
-        self.spawnTimer = self.randomSpawnInterval
-        -- small chance to spawn 0..2 enemies
-        local count = math.random(0,2)
-        self:spawnRandomEnemies(count)
+        self.spawnTimer = self.enemySpawnInterval or self.randomSpawnInterval
+        -- spawn single enemy at random
+        self:spawnRandomEnemies(1)
     end
+end
+
+function Level:setEnemySpawnInterval(seconds)
+    self.enemySpawnInterval = seconds
+    self.randomSpawnInterval = seconds
 end
 
 function Level:reset()

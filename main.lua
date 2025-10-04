@@ -11,6 +11,10 @@ function love.load()
 
     level = Level.new()
     player = Player.new(100, 100, level)
+    -- let level know about player to avoid spawning on top of them
+    level.player = player
+    -- now that level.player is set, spawn a couple of initial enemies
+    level:spawnRandomEnemies(2)
 end
 
 function love.update(dt)
