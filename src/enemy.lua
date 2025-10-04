@@ -29,11 +29,20 @@ function Enemy.new(x, y, w, h, hits, jumpVel)
     -- vertical physics
     self.gravity = 600
     -- default speeds (can be tuned)
-    self.speed = 40
+    self.speed = 80
     self.chaseSpeed = 70
     if self.type == "boss" then self.chaseSpeed = 110 end
     -- direction for patrolling grunts: 1 = right, -1 = left
-    self.direction = 1
+    -- default direction; for grunts choose randomly
+    if self.type == "grunt" then
+        if math.random(0,1) == 0 then
+            self.direction = -1
+        else
+            self.direction = 1
+        end
+    else
+        self.direction = 1
+    end
     -- mark for removal when fallen off platform
     self.remove = false
     -- per-enemy jump velocity (negative value). If provided, use it; otherwise choose sensible defaults by type
